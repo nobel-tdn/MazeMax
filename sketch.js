@@ -49,6 +49,15 @@ let shooters = [];
 let pathfinderEnemies = []; // 💥 New dynamic enemy array
 
 let canvas;
+let isMobileMode = false;
+// バーチャルスティック用
+let stickRadius = 60;
+let knobRadius = 32;
+let stickCenter, knobPos;
+let stickDragging = false;
+let stickPointerId = null;
+let stickDx = 0, stickDy = 0;
+let stickLastMove = 0;
 
 // =============================================================
 function getMaxCellSize() {
@@ -69,7 +78,8 @@ function setup() {
   loadSounds(); // Load sounds on setup
   centerCanvas();
   initStage();
-  if (isMobile()) setupMobileTouch();
+  isMobileMode = isMobile();
+  if (isMobileMode) setupMobileUI();
 }
 
 function centerCanvas() {
@@ -111,6 +121,7 @@ function draw() {
   for (let cell of grid) cell.show();
 
   drawPlayer();
+  if (isMobileMode) drawVirtualStick();
   handleMovement();
   drawGoal();
   checkGoalReached();
@@ -122,6 +133,21 @@ function draw() {
 // =============================================================
 function drawPlayer(){fill(0,0,255);noStroke();ellipse(player.i*cellSize+cellSize/2,player.j*cellSize+cellSize/2,cellSize*.5)}
 function handleMovement(){
+  if (isMobileMode) {
+    // スティックの方向・強さで移動
+    const t = millis();
+    if (stickDragging && (Math.abs(stickDx) > 0.3 || Math.abs(stickDy) > 0.3)) {
+      if (t - stickLastMove > 120) {
+        let dx = Math.abs(stickDx) > Math.abs(stickDy) ? Math.sign(stickDx) : 0;
+        let dy = Math.abs(stickDy) > Math.abs(stickDx) ? Math.sign(stickDy) : 0;
+        if (dx !== 0 || dy !== 0) {
+          movePlayer(dx, dy);
+          stickLastMove = t;
+        }
+      }
+    }
+    return;
+  }
   const t=millis();
   if(t-lastMoveTime<moveCooldown)return;
   const idx=indexFrom(player.i,player.j);
@@ -433,73 +459,81 @@ function toggleMute() {
   }
 }
 
-function setupMobileTouch() {
-  // 仮想ボタンを表示
-  const controls = document.getElementById('mobile-controls');
-  if (controls) controls.style.display = 'block';
-  
-  // 仮想ボタンのイベントリスナー
-  document.getElementById('btn-up').ontouchstart = function(e){ e.preventDefault(); movePlayer(0,-1); };
-  document.getElementById('btn-down').ontouchstart = function(e){ e.preventDefault(); movePlayer(0,1); };
-  document.getElementById('btn-left').ontouchstart = function(e){ e.preventDefault(); movePlayer(-1,0); };
-  document.getElementById('btn-right').ontouchstart = function(e){ e.preventDefault(); movePlayer(1,0); };
-  document.getElementById('btn-shot').ontouchstart = function(e){ e.preventDefault(); shootPlayer(); };
-  
-  // スワイプ・タップ操作
-  let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
-  let moved = false;
-  canvas.elt.addEventListener('touchstart', function(e) {
-    if (e.touches.length === 1) {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-      moved = false;
+function setupMobileUI() {
+  // バーチャルスティック初期化
+  stickRadius = Math.max(60, windowHeight * 0.09);
+  knobRadius = stickRadius * 0.55;
+  stickCenter = createVector(stickRadius + 24, height - stickRadius - 24);
+  knobPos = stickCenter.copy();
+  stickDx = 0; stickDy = 0;
+  // SHOTボタン表示
+  document.getElementById('mobile-shot').style.display = 'block';
+  document.getElementById('img-shot').ontouchstart = function(e){ e.preventDefault(); mobileShot(); };
+  // canvas上のタッチイベント
+  canvas.elt.addEventListener('touchstart', mobileStickTouchStart, {passive:false});
+  canvas.elt.addEventListener('touchmove', mobileStickTouchMove, {passive:false});
+  canvas.elt.addEventListener('touchend', mobileStickTouchEnd, {passive:false});
+}
+
+function mobileStickTouchStart(e) {
+  for (let t of e.touches) {
+    let d = dist(t.clientX, t.clientY, stickCenter.x, stickCenter.y);
+    if (d < stickRadius + 20 && !stickDragging) {
+      stickDragging = true;
+      stickPointerId = t.identifier;
+      updateKnobPos(t.clientX, t.clientY);
+      break;
     }
-  }, {passive: false});
-  canvas.elt.addEventListener('touchmove', function(e) {
-    if (e.touches.length === 1) {
-      touchEndX = e.touches[0].clientX;
-      touchEndY = e.touches[0].clientY;
-      const dx = touchEndX - touchStartX;
-      const dy = touchEndY - touchStartY;
-      if (!moved && (Math.abs(dx) > 30 || Math.abs(dy) > 30)) {
-        if (Math.abs(dx) > Math.abs(dy)) {
-          if (dx > 0) movePlayer(1, 0); // 右
-          else movePlayer(-1, 0); // 左
-        } else {
-          if (dy > 0) movePlayer(0, 1); // 下
-          else movePlayer(0, -1); // 上
-        }
-        moved = true;
-      }
+  }
+}
+function mobileStickTouchMove(e) {
+  if (!stickDragging) return;
+  for (let t of e.touches) {
+    if (t.identifier === stickPointerId) {
+      updateKnobPos(t.clientX, t.clientY);
+      break;
     }
-    e.preventDefault();
-  }, {passive: false});
-  canvas.elt.addEventListener('touchend', function(e) {
-    if (!moved) {
-      // タップ位置方向にショット
-      if (e.changedTouches && e.changedTouches.length === 1) {
-        const tapX = e.changedTouches[0].clientX;
-        const tapY = e.changedTouches[0].clientY;
-        // canvasの左上座標を取得
-        const rect = canvas.elt.getBoundingClientRect();
-        const px = player.i * cellSize + cellSize / 2 + rect.left;
-        const py = player.j * cellSize + cellSize / 2 + rect.top;
-        const dx = tapX - px;
-        const dy = tapY - py;
-        let dirX = 0, dirY = 0;
-        if (Math.abs(dx) > Math.abs(dy)) {
-          dirX = dx > 0 ? 1 : -1;
-        } else {
-          dirY = dy > 0 ? 1 : -1;
-        }
-        if (dirX !== 0 || dirY !== 0) {
-          shootBullet(player.i, player.j, dirX, dirY, 'player');
-          playShootSound();
-        }
-      }
-    }
-    moved = false;
-  }, {passive: false});
+  }
+  e.preventDefault();
+}
+function mobileStickTouchEnd(e) {
+  if (!stickDragging) return;
+  let stillTouching = false;
+  for (let t of e.touches) {
+    if (t.identifier === stickPointerId) stillTouching = true;
+  }
+  if (!stillTouching) {
+    stickDragging = false;
+    knobPos = stickCenter.copy();
+    stickDx = 0; stickDy = 0;
+  }
+}
+function updateKnobPos(x, y) {
+  let dir = createVector(x - stickCenter.x, y - stickCenter.y);
+  if (dir.mag() > stickRadius) dir.setMag(stickRadius);
+  knobPos = p5.Vector.add(stickCenter, dir);
+  stickDx = dir.x / stickRadius;
+  stickDy = dir.y / stickRadius;
+}
+
+function mobileShot() {
+  // スティック方向優先、なければ前回移動方向
+  let dx = Math.abs(stickDx) > 0.3 ? Math.sign(stickDx) : 0;
+  let dy = Math.abs(stickDy) > 0.3 ? Math.sign(stickDy) : 0;
+  if (dx === 0 && dy === 0) { dx = lastMoveDir.dx; dy = lastMoveDir.dy; }
+  shootBullet(player.i, player.j, dx, dy, 'player');
+  playShootSound();
+}
+
+function drawVirtualStick() {
+  // 左下にスティック描画
+  push();
+  noStroke();
+  fill(200, 200, 220, 120);
+  ellipse(stickCenter.x, stickCenter.y, stickRadius * 2);
+  fill(100, 100, 200, 180);
+  ellipse(knobPos.x, knobPos.y, knobRadius * 2);
+  pop();
 }
 
 function movePlayer(dx, dy) {

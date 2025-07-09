@@ -176,3 +176,22 @@ canvas {
     height: 40px;
   }
 }
+
+#mobile-shot img {
+  background: #e53935;
+  border: 3px solid #b71c1c;
+  transition: box-shadow 0.1s, filter 0.1s;
+}
+#mobile-shot img:active {
+  filter: brightness(0.85);
+  box-shadow: 0 2px 8px rgba(183,28,28,0.25);
+}
+
+/* バーチャルスティック用 */
+#virtual-stick-canvas {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  z-index: 1050;
+  pointer-events: none;
+}
