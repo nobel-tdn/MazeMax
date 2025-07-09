@@ -50,7 +50,8 @@ let pathfinderEnemies = []; // 💥 New dynamic enemy array
 
 let canvas;
 let isMobileMode = false;
-// バーチャルスティック用
+// 可動式バーチャルスティック用
+let stickActive = false;
 let stickRadius = 60;
 let knobRadius = 32;
 let stickCenter, knobPos;
@@ -121,7 +122,7 @@ function draw() {
   for (let cell of grid) cell.show();
 
   drawPlayer();
-  if (isMobileMode) drawVirtualStick();
+  if (isMobileMode && stickActive) drawVirtualStick();
   handleMovement();
   drawGoal();
   checkGoalReached();
@@ -136,7 +137,7 @@ function handleMovement(){
   if (isMobileMode) {
     // スティックの方向・強さで移動
     const t = millis();
-    if (stickDragging && (Math.abs(stickDx) > 0.3 || Math.abs(stickDy) > 0.3)) {
+    if (stickActive && stickDragging && (Math.abs(stickDx) > 0.3 || Math.abs(stickDy) > 0.3)) {
       if (t - stickLastMove > 120) {
         let dx = Math.abs(stickDx) > Math.abs(stickDy) ? Math.sign(stickDx) : 0;
         let dy = Math.abs(stickDy) > Math.abs(stickDx) ? Math.sign(stickDy) : 0;
@@ -460,11 +461,9 @@ function toggleMute() {
 }
 
 function setupMobileUI() {
-  // バーチャルスティック初期化
   stickRadius = Math.max(60, windowHeight * 0.09);
   knobRadius = stickRadius * 0.55;
-  stickCenter = createVector(stickRadius + 24, height - stickRadius - 24);
-  knobPos = stickCenter.copy();
+  stickActive = false;
   stickDx = 0; stickDy = 0;
   // SHOTボタン表示
   document.getElementById('mobile-shot').style.display = 'block';
@@ -476,35 +475,36 @@ function setupMobileUI() {
 }
 
 function mobileStickTouchStart(e) {
-  for (let t of e.touches) {
-    let d = dist(t.clientX, t.clientY, stickCenter.x, stickCenter.y);
-    if (d < stickRadius + 20 && !stickDragging) {
-      stickDragging = true;
-      stickPointerId = t.identifier;
-      updateKnobPos(t.clientX, t.clientY);
-      break;
-    }
+  // 1本指のみ可動式スティック発動
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    stickActive = true;
+    stickDragging = true;
+    stickPointerId = t.identifier;
+    stickCenter = createVector(t.clientX - canvas.elt.getBoundingClientRect().left, t.clientY - canvas.elt.getBoundingClientRect().top);
+    knobPos = stickCenter.copy();
+    stickDx = 0; stickDy = 0;
   }
 }
 function mobileStickTouchMove(e) {
-  if (!stickDragging) return;
+  if (!stickActive || !stickDragging) return;
   for (let t of e.touches) {
     if (t.identifier === stickPointerId) {
-      updateKnobPos(t.clientX, t.clientY);
+      updateKnobPos(t.clientX - canvas.elt.getBoundingClientRect().left, t.clientY - canvas.elt.getBoundingClientRect().top);
       break;
     }
   }
   e.preventDefault();
 }
 function mobileStickTouchEnd(e) {
-  if (!stickDragging) return;
+  if (!stickActive) return;
   let stillTouching = false;
   for (let t of e.touches) {
     if (t.identifier === stickPointerId) stillTouching = true;
   }
   if (!stillTouching) {
+    stickActive = false;
     stickDragging = false;
-    knobPos = stickCenter.copy();
     stickDx = 0; stickDy = 0;
   }
 }
@@ -526,7 +526,7 @@ function mobileShot() {
 }
 
 function drawVirtualStick() {
-  // 左下にスティック描画
+  // 可動式スティック描画
   push();
   noStroke();
   fill(200, 200, 220, 120);
