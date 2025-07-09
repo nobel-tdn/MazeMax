@@ -12,7 +12,24 @@
     <main>
     </main>
     <div id="hud"></div>
-    <div id="mobile-controls" style="display:none"></div>
+    <div id="mobile-controls" style="display:none">
+      <!-- 左下のスティック型移動ボタン -->
+      <div id="move-stick" class="control-area">
+        <div class="stick-container">
+          <button class="stick-btn" id="btn-up">▲</button>
+          <div class="stick-row">
+            <button class="stick-btn" id="btn-left">◀</button>
+            <div class="stick-center"></div>
+            <button class="stick-btn" id="btn-right">▶</button>
+          </div>
+          <button class="stick-btn" id="btn-down">▼</button>
+        </div>
+      </div>
+      <!-- 右側のショットボタン -->
+      <div id="shot-button" class="control-area">
+        <button class="shot-btn" id="btn-shot">●</button>
+      </div>
+    </div>
     <script src="sketch.js"></script>
   </body>
 </html>

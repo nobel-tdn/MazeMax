@@ -434,6 +434,18 @@ function toggleMute() {
 }
 
 function setupMobileTouch() {
+  // 仮想ボタンを表示
+  const controls = document.getElementById('mobile-controls');
+  if (controls) controls.style.display = 'block';
+  
+  // 仮想ボタンのイベントリスナー
+  document.getElementById('btn-up').ontouchstart = function(e){ e.preventDefault(); movePlayer(0,-1); };
+  document.getElementById('btn-down').ontouchstart = function(e){ e.preventDefault(); movePlayer(0,1); };
+  document.getElementById('btn-left').ontouchstart = function(e){ e.preventDefault(); movePlayer(-1,0); };
+  document.getElementById('btn-right').ontouchstart = function(e){ e.preventDefault(); movePlayer(1,0); };
+  document.getElementById('btn-shot').ontouchstart = function(e){ e.preventDefault(); shootPlayer(); };
+  
+  // スワイプ・タップ操作
   let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
   let moved = false;
   canvas.elt.addEventListener('touchstart', function(e) {
